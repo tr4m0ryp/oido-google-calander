@@ -8,4 +8,4 @@ Return at most {{max_results}} results.
 
 [parameters]
 query = { type = "string", description = "Search term to match in event title, description, or location", required = true }
-max_results = { type = "number", description = "Maximum number of results to return (default: 20)", default = 20 }
+max_results = { type = "number", description = "Maximum number of results to return (default: 25)", default = 25 }

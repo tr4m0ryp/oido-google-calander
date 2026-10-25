@@ -1,129 +1,210 @@
-# Oido Google Calendar MCP Extension
+# Oido Google Calendar MCP
 
-List, create, search, and read Google Calendar events via Service Account using the Model Context Protocol.
+A Google Calendar [MCP](https://modelcontextprotocol.io) server in Go for assistant agents: one
+endpoint, several Google accounts, and the scheduling tools an email + calendar agent actually
+needs (agenda across accounts, free/busy, free-slot finding, RSVPs, Meet links).
+
+> **Fork of [Djancyp/oido-google-calander](https://github.com/Djancyp/oido-google-calander).**
+> Upstream is a single-account stdio server for the Oido plugin system, authenticated with a
+> service account. This fork keeps that mode working and adds a multi-account HTTP service with
+> an admin dashboard, Google OAuth, encrypted token storage and eight new tools.
+>
+> **License:** upstream publishes no license, so this fork does not add one either and does not
+> relicense anything. Without a license, default copyright applies to the upstream code; ask the
+> upstream author before reusing it outside GitHub's fork-and-view terms.
 
 ## Features
 
-- **List Events**: View upcoming calendar events
-- **Read Events**: Fetch full event details by ID
-- **Create Events**: Add new events to your calendar
-- **Search Events**: Find events by title, description, or location
-
-## Installation
-
-### Option 1: Upload via Plugins UI (Recommended)
-
-1. Download the latest release zip for your platform from [GitHub Releases](../../releases)
-   - Linux: `oido-google-calendar-linux-amd64.zip`
-   - macOS (Apple Silicon): `oido-google-calendar-darwin-arm64.zip`
-2. Open Qwen CLI → Plugins UI
-3. Upload the zip file
-4. Configure settings (paste service account JSON key) in the plugin settings panel
-
-### Option 2: Build from Source
-
-```bash
-git clone <repo-url>
-cd oido-google-calendar
-make build
-```
-
-Then point your plugin configuration to the built `oido-google-calendar-mcp` binary.
-
-### Option 3: Manual Install from Release Artifacts
-
-```bash
-curl -LO https://github.com/<owner>/<repo>/releases/latest/download/oido-google-calendar-linux-amd64.zip
-unzip oido-google-calendar-linux-amd64.zip -d oido-google-calendar
-./oido-google-calendar/oido-google-calendar-mcp
-```
-
-## Requirements
-
-- Go 1.26+
-- Google Cloud project with Calendar API enabled
-- Service account with JSON key
-
-## Setup
-
-### 1. Create a Service Account
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
-3. Enable the **Google Calendar API**
-4. Go to **IAM & Admin** → **Service Accounts** → **Create Service Account**
-5. Name it "Oido Calendar" → **Create and Continue**
-6. Skip granting permissions (not needed) → **Done**
-7. Click the service account → **Keys** → **Add Key** → **Create New Key**
-8. Choose **JSON** → **Create** → the JSON key file downloads automatically
-
-### 2. Share Your Calendar with the Service Account
-
-1. Copy `client_email` from the downloaded JSON key (looks like `oido-calendar@your-project.iam.gserviceaccount.com`)
-2. Open [Google Calendar](https://calendar.google.com/)
-3. Find the calendar you want to access → click **⋮** → **Settings and sharing**
-4. Under **Share with specific people**, add the service account email
-5. Set permission to **Make changes to events** (for full access)
-
-### 3. Configure Extension
-
-Open the JSON key file, copy the **entire content**, and paste it as `CALENDAR_SERVICE_ACCOUNT_JSON`.  
-
-**If newlines cause issues**, use base64 instead:
-```bash
-base64 -w0 /path/to/service-account.json
-# Copy the output → paste as CALENDAR_SERVICE_ACCOUNT_B64
-```
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `CALENDAR_SERVICE_ACCOUNT_JSON` | Service account JSON key (raw) | *(optional)* |
-| `CALENDAR_SERVICE_ACCOUNT_B64` | Base64-encoded JSON key (alternative) | *(optional)* |
-| `CALENDAR_ID` | Calendar ID (use your email for your main calendar) | `primary` |
-| `CALENDAR_MAX_RESULTS` | Max events per list/search | `20` |
-| `CALENDAR_TIMEZONE` | Timezone for events | *(system timezone)* |
-
-## Build
-
-```bash
-make build
-```
-
-## Package for Distribution
-
-```bash
-make dist
-```
-
-This creates `dist/oido-google-calendar.zip` for upload via the Plugins UI.
+- **Two transports**: Streamable HTTP (`POST /mcp`, static bearer token) for remote agents, and
+  stdio for local clients and the Oido plugin (upstream behaviour, unchanged).
+- **Multi-account**: connect any number of Google accounts through the `/setup` dashboard. Every
+  tool takes `account`; read-only tools also accept `all` and fan out in parallel, reporting
+  per-account errors inline instead of failing the whole call.
+- **Scheduling**: merged free/busy across accounts and a free-slot finder that respects working
+  hours, working days, buffers, slot alignment and DST.
+- **Events**: list, search, get, create, update, delete (two-step, needs `confirm:true`),
+  natural-language quick add, and RSVP. Create supports guests, optional guests, reminders,
+  RFC 5545 recurrence and Google Meet links.
+- **Timezones done properly**: RFC3339 input keeps its offset; naive input (`2026-05-15T09:00`) is
+  read in the `timezone` argument, else the calendar's own zone, else `DEFAULT_TIMEZONE`. A bare
+  date means an all-day event, or the whole day in a range. Zone data is compiled in.
+- **Admin dashboard**: password login with throttling, connected accounts with a live snapshot of
+  each account's calendars and next events, one-click connect and remove, light and dark themes,
+  phone layout. No external requests, strict CSP.
 
 ## Tools
 
-### `g_calendar_list_events`
-List upcoming events from the calendar. Optionally filter by `max_results` and `time_min`.
+All tools take an optional `account` (email). It may be omitted when exactly one account is
+connected. Results are JSON.
 
-### `g_calendar_get_event`
-Get full event details by event ID.
-
-### `g_calendar_create_event`
-Create a new event. Requires `summary`, `start_time`, and `end_time` (RFC3339 format).
-
-### `g_calendar_search_events`
-Search events by query string matching title, description, or location.
+| Tool | Purpose | Key arguments |
+|---|---|---|
+| `g_calendar_list_accounts` | Connected accounts | |
+| `g_calendar_list_calendars` | Calendars per account, with access role and zone | `account` (or `all`) |
+| `g_calendar_list_events` | Events in a range, recurring events expanded | `time_min`, `time_max`, `query`, `calendar_id`, `timezone`, `max_results` |
+| `g_calendar_search_events` | Text search over title, description, location, guests | `query`, range as above |
+| `g_calendar_get_event` | One event in full (guests, responses, Meet link, recurrence) | `event_id` |
+| `g_calendar_create_event` | Create an event | `summary`, `start_time`, `end_time`, `attendees`, `optional_attendees`, `recurrence`, `reminders`, `add_meet`, `send_updates` |
+| `g_calendar_update_event` | Patch an event; omitted fields stay | `event_id`, any create field, `add_attendees`, `remove_attendees` |
+| `g_calendar_delete_event` | Preview, then delete with `confirm:true` | `event_id`, `confirm`, `send_updates` |
+| `g_calendar_quick_add` | Create from a sentence ("Lunch with Sam Friday 1pm") | `text` |
+| `g_calendar_respond_to_event` | Accept, decline or tentatively accept an invite | `event_id`, `response`, `comment` |
+| `g_calendar_freebusy` | Busy blocks per account plus the merged union | `account` (default `all`), `time_min`, `time_max` |
+| `g_calendar_find_free_slots` | Free ranges open on every selected account | `duration_minutes`, `working_hours_start`/`_end`, `working_days`, `buffer_minutes`, `granularity_minutes`, `timezone` |
 
 ## Architecture
 
 ```
-┌─────────────┐     stdio      ┌─────────────────────────────┐
-│  Qwen CLI   │ ◄────────────► │  oido-google-calendar-mcp    │
-│             │                │                             │
-│             │                │  ┌───────────────────────┐  │
-│             │                │  │ Calendar API Client    │──► Google Calendar API
-│             │                │  │ (Service Account)              │  │
-│             │                │  └───────────────────────┘  │
-└─────────────┘                └─────────────────────────────┘
+cmd/oido-google-calendar/     entry point: stdio (default), `serve`, `healthcheck`
+internal/
+  config/                     env parsing, fail-fast validation, upstream --config/.env support
+  auth/crypt/                 AES-256-GCM sealing of refresh tokens (scrypt-derived key)
+  auth/googleauth/            OAuth web flow: consent URL, code exchange, verified email
+  store/                      encrypted account store (atomic 0600 JSON file)
+  account/                    account name -> calendar client (OAuth accounts or service account)
+  calendar/                   Google Calendar API wrapper and compact event views
+    timeinput/                time and timezone parsing
+    availability/             interval merging and the free-slot search (pure, no Google types)
+  tools/                      MCP tool schemas, validation and multi-account fan-out
+  server/                     HTTP mux: /mcp (bearer), /health
+    clientip/                 real client IP behind trusted proxies
+    admin/                    /setup dashboard and /oauth/start, /oauth/callback
+      access/                 login throttle, sessions, constant-time password check
+      views/                  embedded templates and CSS
 ```
 
-## License
+The HTTP service is stateless towards MCP clients (each request gets a fresh session) and keeps
+one cached, auto-refreshing token source per connected account.
 
-MIT
+## Quick start (Docker)
+
+```bash
+git clone https://github.com/tr4m0ryp/oido-google-calander && cd oido-google-calander
+cp .env.example .env            # fill in the values, see below
+chmod 600 .env
+docker compose up -d --build    # listens on 127.0.0.1:3110
+curl -s http://127.0.0.1:3110/health
+```
+
+Put a TLS reverse proxy in front. With Caddy:
+
+```
+calendar.example.com {
+	reverse_proxy 127.0.0.1:3110
+}
+```
+
+Then open `https://calendar.example.com/setup`, sign in with `ADMIN_PASSWORD`, and click
+**Connect Google account** for each account.
+
+## Google OAuth setup
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), pick or create a project and
+   enable the **Google Calendar API** (`gcloud services enable calendar-json.googleapis.com`).
+2. Under **Google Auth Platform > Branding / Audience**, configure the consent screen. While the
+   app is in *Testing*, add every Google account you will connect as a test user.
+3. Under **Data access**, add the scope `https://www.googleapis.com/auth/calendar` (plus
+   `openid` and `email`). Unverified apps still work for test users after a warning screen.
+4. Under **Clients**, create an OAuth client of type **Web application** and add the authorized
+   redirect URI `https://calendar.example.com/oauth/callback` (that is, `SERVER_URL` +
+   `/oauth/callback`).
+5. Copy the client ID and secret into `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+One OAuth client can serve several apps; add one redirect URI per deployment.
+
+## Configuration
+
+| Variable | Required | Default | Meaning |
+|---|---|---|---|
+| `SERVER_URL` | yes | `http://localhost:$PORT` | Public base URL; builds the MCP URL and the OAuth redirect URI |
+| `GOOGLE_CLIENT_ID` | yes | | OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | yes | | OAuth client secret |
+| `ADMIN_PASSWORD` | yes | | Dashboard password, 12+ characters |
+| `ENCRYPTION_KEY` | yes | | Secret for sealing refresh tokens (`openssl rand -hex 32`); changing it orphans stored tokens |
+| `MCP_API_KEY` | yes | | Bearer token MCP clients must send (`openssl rand -hex 32`) |
+| `MCP_ALLOW_UNAUTHENTICATED` | no | `false` | Allow an empty `MCP_API_KEY`; private networks only |
+| `DATA_DIR` | no | `./data` (`/data` in Docker) | Where `accounts.json` lives |
+| `PORT` / `BIND` | no | `3000` / `0.0.0.0` | Listen address |
+| `DEFAULT_TIMEZONE` | no | `UTC` | Last-resort zone for naive times |
+| `ADMIN_LOGIN_MAX_FAILURES` | no | `5` | Failed logins per IP before lockout |
+| `ADMIN_LOGIN_WINDOW_MINUTES` | no | `15` | Sliding window for counting failures |
+| `ADMIN_LOGIN_LOCKOUT_MINUTES` | no | `15` | Lockout length (answers 429 with `Retry-After`) |
+| `ADMIN_LOGIN_GLOBAL_MAX_FAILURES` | no | `50` | Failures across all IPs that pause every login (0 = off) |
+| `ADMIN_SESSION_HOURS` | no | `12` | Admin session lifetime |
+| `TRUSTED_PROXIES` | no | loopback and private ranges | CIDRs allowed to set `X-Forwarded-For` |
+
+Stdio mode reads the upstream variables instead: `CALENDAR_SERVICE_ACCOUNT_JSON` or
+`CALENDAR_SERVICE_ACCOUNT_B64`, `CALENDAR_ID` and `CALENDAR_TIMEZONE`, from the environment, a
+`.env` next to the binary, or `--config '<json>'`.
+
+## Connecting an MCP client
+
+Every request to `/mcp` needs `Authorization: Bearer <MCP_API_KEY>`.
+
+Claude Code:
+
+```bash
+claude mcp add --transport http google-calendar https://calendar.example.com/mcp \
+  --header "Authorization: Bearer $MCP_API_KEY"
+```
+
+Generic JSON client configuration:
+
+```json
+{
+  "mcpServers": {
+    "google-calendar": {
+      "type": "http",
+      "url": "https://calendar.example.com/mcp",
+      "headers": { "Authorization": "Bearer <MCP_API_KEY>" }
+    }
+  }
+}
+```
+
+Smoke test:
+
+```bash
+curl -s https://calendar.example.com/mcp \
+  -H "Authorization: Bearer $MCP_API_KEY" -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+### Stdio and the Oido plugin
+
+Without arguments the binary speaks MCP over stdio with a service account, exactly like
+upstream, so `plugin.json`, `oido-extension.json` and `make dist` keep working. Share the target
+calendar with the service account's email and set `CALENDAR_ID` to it.
+
+```bash
+make build
+CALENDAR_SERVICE_ACCOUNT_B64=$(base64 < key.json) CALENDAR_ID=you@example.com ./oido-google-calendar-mcp
+```
+
+## Security notes
+
+- Refresh tokens are sealed with AES-256-GCM (random nonce, account email as associated data, key
+  derived with scrypt) and written atomically with mode 0600. Access tokens live only in memory.
+- `/mcp` compares the bearer token in constant time. The server refuses to start without
+  `MCP_API_KEY` unless `MCP_ALLOW_UNAUTHENTICATED=true`.
+- The dashboard uses a server-side session in an `HttpOnly`, `SameSite=Lax` cookie (`Secure` on
+  HTTPS); the password never appears in a URL. Form posts carry a CSRF token. Scripts may send
+  the password in an `X-Admin-Key` header instead.
+- Failed logins are throttled per client IP (default 5 per 15 minutes, then a 15-minute lockout
+  with `429` and `Retry-After`) and globally. The client IP comes from `X-Forwarded-For` only when
+  the direct peer is a trusted proxy, so bind the service to localhost behind the proxy.
+- The OAuth `state` is a single-use nonce bound to the admin session that started the flow and
+  expires after 10 minutes.
+- Admin pages send a strict nonce-based CSP, `no-store`, `no-referrer` and `DENY` framing, and
+  never render secrets. Request logs record method, path and status only.
+- Deleting an event is two-step: without `confirm:true` the tool returns a preview.
+
+## Development
+
+```bash
+make test        # go vet + go test ./...
+make build       # ./oido-google-calendar-mcp
+VIEWS_PREVIEW_DIR=/tmp/preview go test ./internal/server/admin/views -run Preview
+                 # renders fixture dashboard pages for visual review
+```

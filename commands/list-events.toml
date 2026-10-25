@@ -7,4 +7,4 @@ Show the event ID, summary, start time, and end time for each event.
 """
 
 [parameters]
-max_results = { type = "number", description = "Maximum number of events to return (default: 20)", default = 20 }
+max_results = { type = "number", description = "Maximum number of events to return (default: 25)", default = 25 }

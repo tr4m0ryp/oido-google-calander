@@ -1,16 +1,35 @@
 {
   "id": "oido-google-calendar",
   "name": "Oido Google Calendar",
-  "version": "1.0.0",
-  "description": "List, create, search, and read Google Calendar events via Service Account using MCP server.",
+  "version": "2.0.0",
+  "description": "Google Calendar MCP server: events, free/busy, free slots, RSVPs and Meet links, over stdio (service account) or multi-account HTTP.",
   "type": "extension",
   "enabled": true,
   "binary": "oido-google-calendar-mcp",
   "protocol_version": 1,
-  "os": ["linux", "darwin"],
-  "arch": ["amd64", "arm64"],
+  "os": [
+    "linux",
+    "darwin"
+  ],
+  "arch": [
+    "amd64",
+    "arm64"
+  ],
   "config_schema": {},
-  "capabilities": ["g_calendar_list_events", "g_calendar_get_event", "g_calendar_create_event", "g_calendar_search_events"],
+  "capabilities": [
+    "g_calendar_list_accounts",
+    "g_calendar_list_calendars",
+    "g_calendar_list_events",
+    "g_calendar_search_events",
+    "g_calendar_get_event",
+    "g_calendar_create_event",
+    "g_calendar_update_event",
+    "g_calendar_delete_event",
+    "g_calendar_quick_add",
+    "g_calendar_respond_to_event",
+    "g_calendar_freebusy",
+    "g_calendar_find_free_slots"
+  ],
   "author": "oido-studio",
   "homepage": "https://calendar.google.com"
 }

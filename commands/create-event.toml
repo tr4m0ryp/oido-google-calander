@@ -13,7 +13,7 @@ Location: {{location}}
 
 [parameters]
 summary = { type = "string", description = "Title of the event", required = true }
-start_time = { type = "string", description = "Start time in RFC3339 format (e.g. 2026-05-15T09:00:00Z)", required = true }
-end_time = { type = "string", description = "End time in RFC3339 format (e.g. 2026-05-15T10:00:00Z)", required = true }
+start_time = { type = "string", description = "Start: RFC3339, local 2026-05-15T09:00, or a date for all-day", required = true }
+end_time = { type = "string", description = "End (default: start + 1 hour)" }
 description = { type = "string", description = "Description or notes for the event" }
 location = { type = "string", description = "Location of the event" }

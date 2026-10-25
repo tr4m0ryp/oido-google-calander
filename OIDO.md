@@ -1,96 +1,53 @@
 # Oido Google Calendar Extension
 
-List, create, search, and read Google Calendar events via Service Account. This extension provides MCP tools for calendar management.
+Read and manage Google Calendar through MCP tools. In the Oido plugin the server runs over stdio
+with a service account and acts on the calendar in `CALENDAR_ID`; the same binary can also run as
+a multi-account HTTP service (see README).
 
-## Available Tools
+## Conventions
 
-### `g_calendar_list_events`
-List upcoming events from the calendar.
+- `account` is optional on every tool when one account is configured; read-only tools accept
+  `all` to merge results across accounts.
+- Times: RFC3339 with an offset (`2026-05-15T09:00:00+02:00`), or a local time
+  (`2026-05-15T09:00`) read in `timezone` (IANA name, default: the calendar's zone). A bare date
+  (`2026-05-15`) means an all-day event, or the whole day when used as a range bound.
+- `calendar_id` defaults to the configured calendar.
+- Results are JSON; event ids from list/search feed get/update/delete/respond.
 
-**Parameters:**
-- `max_results` (number, optional): Maximum number of events to return (default: 20)
-- `time_min` (string, optional): Start of time range (RFC3339 format, default: now)
+## Tools
 
-**Returns:** Formatted table with ID, Summary, Start, End.
+- `g_calendar_list_accounts`: accounts this server can use.
+- `g_calendar_list_calendars`: calendars with access role and time zone.
+- `g_calendar_list_events`: events between `time_min` (default now) and `time_max`, optional `query`.
+- `g_calendar_search_events`: text search (`query` required) over title, description, location, guests.
+- `g_calendar_get_event`: one event in full by `event_id`.
+- `g_calendar_create_event`: `summary`, `start_time`, optional `end_time` (default +1h),
+  `attendees`, `optional_attendees`, `recurrence` (e.g. `RRULE:FREQ=WEEKLY;COUNT=5`),
+  `reminders`, `add_meet`, `send_updates`.
+- `g_calendar_update_event`: patch by `event_id`; only the fields given change.
+- `g_calendar_delete_event`: returns a preview; deletes only with `confirm: true`.
+- `g_calendar_quick_add`: create from a sentence, e.g. "Dentist Tuesday 3pm".
+- `g_calendar_respond_to_event`: `response` accepted, declined or tentative.
+- `g_calendar_freebusy`: busy blocks in a window, merged across accounts.
+- `g_calendar_find_free_slots`: free ranges of `duration_minutes` within working hours and days.
 
-### `g_calendar_get_event`
-Get full details of a specific event by its ID.
+## Guidelines
 
-**Parameters:**
-- `event_id` (string, required): ID of the event to retrieve
+1. Confirm with the user before deleting, and before sending invitations (`send_updates: all`).
+2. Use `g_calendar_find_free_slots` before proposing meeting times instead of guessing.
+3. State times in the user's zone; pass `timezone` when the user names one.
 
-**Returns:** Summary, Description, Start, End, Location, Status, Creator, Attendees.
-
-### `g_calendar_create_event`
-Create a new event on the calendar.
-
-**Parameters:**
-- `summary` (string, required): Title of the event
-- `start_time` (string, required): Start time in RFC3339 format (e.g. 2026-05-15T09:00:00Z)
-- `end_time` (string, required): End time in RFC3339 format (e.g. 2026-05-15T10:00:00Z)
-- `description` (string, optional): Description or notes for the event
-- `location` (string, optional): Location of the event
-
-**Returns:** Confirmation with event ID, summary, and times.
-
-### `g_calendar_search_events`
-Search events by query string matching title, description, or location.
-
-**Parameters:**
-- `query` (string, required): Search term to match in event title, description, or location
-- `max_results` (number, optional): Maximum number of results to return (default: 20)
-
-**Returns:** Formatted table with matching events (ID, Summary, Start, End).
-
-## Example Usage
+## Example
 
 ```
-User: What's on my calendar this week?
+User: Find an hour for a call with the team next week and send the invite.
 
-Assistant: Let me check your upcoming events.
+Assistant: [g_calendar_find_free_slots duration_minutes: 60, time_min: "2026-05-18", time_max: "2026-05-22"]
+Tuesday 10:00-11:00 and Wednesday 14:00-15:00 are free. Which one?
 
-[Uses g_calendar_list_events tool]
+User: Tuesday. Invite sam@example.com with a Meet link.
 
-Upcoming Events (3):
-
-ID                                     | Summary                      | Start                | End
----------------------------------------+------------------------------+----------------------+----------------------
-abc123def456                           | Q2 Planning Meeting          | 2026-05-15T09:00:00Z | 2026-05-15T10:00:00Z
-def789abc012                           | Lunch with Alice             | 2026-05-15T12:00:00Z | 2026-05-15T13:00:00Z
-...
+Assistant: [g_calendar_create_event summary: "Team call", start_time: "2026-05-19T10:00",
+            attendees: ["sam@example.com"], add_meet: true, send_updates: "all"]
+Created "Team call" on Tuesday 10:00-11:00 with a Meet link; Sam has been invited.
 ```
-
-```
-User: Create a meeting tomorrow at 2pm for 1 hour called 'Sprint Review'
-
-Assistant: I'll create that event for you.
-
-[Uses g_calendar_create_event tool]
-
-Event created successfully:
-
-Summary:  Sprint Review
-ID:       xyz123abc456
-Start:    2026-05-03T14:00:00Z
-End:      2026-05-03T15:00:00Z
-```
-
-## When to Use
-
-- User asks to see calendar events or schedule
-- User wants to create a new event or meeting
-- User asks for event details
-- User wants to search for specific events
-
-## Notes
-
-- **Service Account authentication**: Uses Google Calendar API v3 with a service account JWT key (no browser OAuth flow needed)
-- **Calendar ID**: Defaults to "primary" (service account's own calendar); use a shared calendar email or ID to access other calendars
-- **Must share your calendar**: For the service account to access **your** Google Calendar, share your calendar with the service account email (found in the JSON key under `client_email`)
-- **Time format**: All times are in RFC3339 format
-- **Event IDs**: Use the event ID from g_calendar_list_events/g_calendar_search_events when calling g_calendar_get_event
-- **Environment variable for authentication** (set one of):
-  - `CALENDAR_SERVICE_ACCOUNT_JSON`: Paste the entire service account JSON key (raw)
-  - `CALENDAR_SERVICE_ACCOUNT_B64`: Base64-encoded version of the JSON (avoids newline issues in env vars)
-- **Limits**: Default 20 events for list/search
-- **Creating events**: Requires a Google Cloud project with Calendar API enabled and a service account created

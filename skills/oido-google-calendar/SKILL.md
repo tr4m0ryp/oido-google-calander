@@ -1,213 +1,55 @@
 ---
 name: oido-google-calendar
-description: List, create, search, and read Google Calendar events via Service Account
+description: Read and manage Google Calendar events, free/busy, free slots and invitations across one or more Google accounts
 ---
 
 # Oido Google Calendar Extension
 
 ## Overview
 
-The Oido Google Calendar extension provides tools to list, create, search, and read events on Google Calendar via the Calendar API v3 with a service account. Use these tools when users ask about their schedule, want to create meetings, or need to find specific events.
+Tools over the Google Calendar API v3. Use them when the user asks about their schedule, wants to
+book or move meetings, find a free time, or answer an invitation. Results are JSON.
 
-## Available Tools
+## Conventions
 
-### `g_calendar_list_events`
+- **account**: optional when one account is configured. Read-only tools accept `all` and return
+  one entry per account, each with its own `error` if that account failed.
+- **Times**: RFC3339 with an offset, or local `2026-05-15T09:00` read in `timezone` (IANA name,
+  default: the calendar's zone). A bare date is an all-day event, or the whole day in a range.
+- **calendar_id**: defaults to the configured calendar; get others from `g_calendar_list_calendars`.
 
-List upcoming events from the calendar.
+## Tools
 
-**Parameters:**
-- `max_results` (number, optional): Maximum number of events to return (default: 20)
-- `time_min` (string, optional): Start of time range (RFC3339 format, default: now)
+| Tool | Use it when | Notes |
+|---|---|---|
+| `g_calendar_list_accounts` | You need the account emails | |
+| `g_calendar_list_calendars` | The user mentions a non-default calendar | access role and zone included |
+| `g_calendar_list_events` | "What's on my calendar this week?" | `time_min` default now; `time_max`, `query`, `max_results` (25) |
+| `g_calendar_search_events` | "When is my dentist appointment?" | `query` required; searches from now unless `time_min` is set |
+| `g_calendar_get_event` | Details, guests, Meet link of one event | `event_id` from list/search |
+| `g_calendar_create_event` | Booking a meeting | `summary`, `start_time`, `end_time` (default +1h), `attendees`, `recurrence`, `reminders`, `add_meet`, `send_updates` |
+| `g_calendar_update_event` | Moving or editing an event | only given fields change; `add_attendees` / `remove_attendees` |
+| `g_calendar_delete_event` | Cancelling an event | first call previews; pass `confirm: true` after the user agrees |
+| `g_calendar_quick_add` | The user dictates a sentence | Google parses "Lunch with Sam Friday 1pm" |
+| `g_calendar_respond_to_event` | Accept, decline, maybe | `response`: accepted, declined, tentative; optional `comment` |
+| `g_calendar_freebusy` | Raw busy blocks in a window | merged across accounts in `merged_busy` |
+| `g_calendar_find_free_slots` | Proposing meeting times | `duration_minutes`; working hours default 09:00-17:00 Mon-Fri |
 
-**When to use:**
-- User asks "what's on my calendar?"
-- User wants to see upcoming events
-- User wants to check their schedule
+## Best practices
 
-**Example Usage:**
-```
-User: "Show me my next 10 events"
-→ Call g_calendar_list_events with max_results: 10
-```
+1. **Search before acting**: get the `event_id` from list or search; never invent ids.
+2. **Confirm side effects**: ask before deleting, and before `send_updates: "all"` emails guests.
+3. **Find, then propose**: use `g_calendar_find_free_slots` rather than guessing free times.
+4. **Speak the user's zone**: pass `timezone` when the user names one and echo times in it.
+5. **Report partial failures**: when `all` returns an `error` for one account, say so.
 
-**Response Format:**
-Returns formatted table with ID, Summary, Start, End.
-
-### `g_calendar_get_event`
-
-Get full details of a specific event by its ID.
-
-**Parameters:**
-- `event_id` (string, required): ID of the event to retrieve
-
-**When to use:**
-- User asks for details of a specific event
-- User wants to see full event information
-- User references an event ID from a previous g_calendar_list_events result
-
-**Example Usage:**
-```
-User: "Show me details for event abc123"
-→ Call g_calendar_get_event with event_id: "abc123"
-```
-
-**Response Format:**
-Returns Summary, Description, Start, End, Location, Status, Creator, Attendees.
-
-### `g_calendar_create_event`
-
-Create a new event on the calendar.
-
-**Parameters:**
-- `summary` (string, required): Title of the event
-- `start_time` (string, required): Start time in RFC3339 format (e.g. 2026-05-15T09:00:00Z)
-- `end_time` (string, required): End time in RFC3339 format (e.g. 2026-05-15T10:00:00Z)
-- `description` (string, optional): Description or notes for the event
-- `location` (string, optional): Location of the event
-
-**When to use:**
-- User asks to create an event or meeting
-- User wants to add something to their calendar
-- User wants to schedule a new appointment
-
-**Example Usage:**
-```
-User: "Create a meeting tomorrow at 2pm for 1 hour called 'Sprint Review'"
-→ Call g_calendar_create_event with summary: "Sprint Review", start_time: "2026-05-03T14:00:00Z", end_time: "2026-05-03T15:00:00Z"
-```
-
-**Response Format:**
-Returns confirmation with event ID, summary, start, and end times.
-
-### `g_calendar_search_events`
-
-Search events by query string matching title, description, or location.
-
-**Parameters:**
-- `query` (string, required): Search term to match in event title, description, or location
-- `max_results` (number, optional): Maximum number of results to return (default: 20)
-
-**When to use:**
-- User asks to search for events
-- User wants to find events about a specific topic
-- User wants to filter calendar by keyword
-
-**Example Usage:**
-```
-User: "Find events about 'meeting'"
-→ Call g_calendar_search_events with query: "meeting"
-```
-
-**Response Format:**
-Returns formatted table with ID, Summary, Start, End for matching events.
-
-## Best Practices
-
-1. **List before reading**: Use g_calendar_list_events first to show available events, then g_calendar_get_event for details
-2. **ID-based access**: Always use the event ID from g_calendar_list_events/g_calendar_search_events when calling g_calendar_get_event
-3. **RFC3339 times**: Always use RFC3339 format for time parameters
-4. **Default limits**: Respect max_results limits (default 20 for list/search)
-5. **Context**: Mention results are from the user's primary calendar unless otherwise specified
-
-## Example Interactions
-
-### Listing Events
+## Example
 
 ```
-User: "What's on my calendar?"
+User: Move tomorrow's standup to 10:30 and tell everyone.
 
-Assistant: Let me check your upcoming events.
-[Calls g_calendar_list_events with max_results: 20]
-
-Upcoming Events (3):
-
-ID                                     | Summary                      | Start                | End
----------------------------------------+------------------------------+----------------------+----------------------
-abc123def456                           | Q2 Planning Meeting          | 2026-05-15T09:00:00Z | 2026-05-15T10:00:00Z
-def789abc012                           | Lunch with Alice             | 2026-05-15T12:00:00Z | 2026-05-15T13:00:00Z
-...
-
-Would you like details on any of these?
+Assistant: [g_calendar_search_events query: "standup", time_min: "2026-05-15", time_max: "2026-05-15"]
+[g_calendar_update_event event_id: "abc123", start_time: "2026-05-15T10:30",
+ end_time: "2026-05-15T10:45", send_updates: "all"]
+Standup moved to 10:30-10:45 tomorrow; attendees were notified.
 ```
-
-### Reading an Event
-
-```
-User: "Show me details for event abc123def456"
-
-Assistant: Let me fetch that event's details.
-[Calls g_calendar_get_event with event_id: "abc123def456"]
-
-Summary:     Q2 Planning Meeting
-ID:          abc123def456
-Status:      confirmed
-Start:       2026-05-15T09:00:00Z
-End:         2026-05-15T10:00:00Z
-Location:    Conference Room A
-Creator:     user@gmail.com
-Attendees:   [alice@example.com bob@example.com]
--------
-Quarterly planning session. Please review the agenda beforehand.
-```
-
-### Creating an Event
-
-```
-User: "Schedule a lunch meeting with Alice for tomorrow at 12pm lasting 1 hour"
-
-Assistant: I'll create that event for you.
-[Calls g_calendar_create_event with summary: "Lunch with Alice", start_time: "...T12:00:00Z", end_time: "...T13:00:00Z"]
-
-Event created successfully:
-
-Summary:     Lunch with Alice
-ID:          xyz789abc123
-Start:       2026-05-03T12:00:00Z
-End:         2026-05-03T13:00:00Z
-```
-
-### Searching Events
-
-```
-User: "Find events about 'sprint'"
-
-Assistant: Let me search your calendar for "sprint".
-[Calls g_calendar_search_events with query: "sprint"]
-
-Search Results for "sprint" (2):
-
-ID                                     | Summary                      | Start                | End
----------------------------------------+------------------------------+----------------------+----------------------
-abc789def012                           | Sprint Planning              | 2026-05-10T10:00:00Z | 2026-05-10T11:00:00Z
-ghi345jkl678                           | Sprint Retrospective         | 2026-05-14T15:00:00Z | 2026-05-14T16:00:00Z
-```
-
-## Limitations
-
-- **Service Account only**: Requires a Google Cloud service account JSON key (no browser OAuth flow)
-- **Must share calendar**: Add the service account email to your calendar's share settings
-- **Single calendar**: Reads from one calendar at a time (defaults to primary)
-- **No recurrence expansion**: Recurring events may appear as single instances
-- **No attendee management**: Creates events without adding attendees
-- **No reminders**: Does not set event reminders
-- **No color/label customization**: Creates events with default settings
-- Requires environment variable: CALENDAR_SERVICE_ACCOUNT_JSON (paste the entire JSON key content)
-- **Google Cloud setup required**: Requires enabling Calendar API and creating a service account
-- **RFC3339 time format**: All times must be in RFC3339 format
-
-## Related Commands
-
-- `/list-events` - List upcoming events (custom command)
-- `/get-event` - Get full event details (custom command)
-- `/create-event` - Create a new event (custom command)
-- `/search-events` - Search events by query (custom command)
-
-## Triggers
-
-Use these tools when you see:
-- "calendar" or "schedule" or "event"
-- "meeting" or "appointment"
-- "what's on my calendar" or "upcoming events"
-- "create event" or "add to calendar"
-- "find event" or "search calendar"
-- Google Calendar, schedule, planning
