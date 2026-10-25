@@ -13,7 +13,7 @@ import (
 
 func TestAuthURL(t *testing.T) {
 	f := NewFlow("client-id", "client-secret", "https://cal.example.test/oauth/callback")
-	u, err := url.Parse(f.AuthURL("nonce123"))
+	u, err := url.Parse(f.AuthURL("nonce123", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,8 +29,17 @@ func TestAuthURL(t *testing.T) {
 			t.Errorf("%s = %q, want %q", k, got, want)
 		}
 	}
-	if !strings.Contains(q.Get("scope"), "https://www.googleapis.com/auth/calendar") {
-		t.Errorf("scope %q lacks calendar", q.Get("scope"))
+	for _, want := range []string{"https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/tasks"} {
+		if !HasScope(ParseScopes(q.Get("scope")), want) {
+			t.Errorf("scope %q lacks %s", q.Get("scope"), want)
+		}
+	}
+	if q.Has("login_hint") {
+		t.Error("login_hint sent without a hint")
+	}
+	hinted, _ := url.Parse(f.AuthURL("n", "me@example.com"))
+	if hinted.Query().Get("login_hint") != "me@example.com" {
+		t.Errorf("reconnect URL lacks login_hint: %s", hinted)
 	}
 	if strings.Contains(u.String(), "client-secret") {
 		t.Error("auth URL leaks the client secret")
@@ -65,6 +74,9 @@ func TestExchange(t *testing.T) {
 	if g.Email != "person@example.com" || g.RefreshToken != "1//rt" {
 		t.Errorf("grant = %+v", g)
 	}
+	if !HasScope(g.Scopes, "https://www.googleapis.com/auth/calendar") || HasScope(g.Scopes, TasksScope) {
+		t.Errorf("grant scopes = %v", g.Scopes)
+	}
 }
 
 func TestGrantedCalendar(t *testing.T) {
@@ -80,6 +92,30 @@ func TestGrantedCalendar(t *testing.T) {
 		tok := (&oauth2.Token{}).WithExtra(map[string]any{"scope": tc.scope})
 		if got := grantedCalendar(tok); got != tc.want {
 			t.Errorf("grantedCalendar(%q) = %v, want %v", tc.scope, got, tc.want)
+		}
+	}
+}
+
+func TestHasScope(t *testing.T) {
+	legacy := ParseScopes("openid email https://www.googleapis.com/auth/calendar")
+	upgraded := ParseScopes("https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/tasks openid")
+	readonly := ParseScopes("https://www.googleapis.com/auth/tasks.readonly")
+	tests := []struct {
+		name    string
+		granted []string
+		want    string
+		ok      bool
+	}{
+		{"legacy grant lacks tasks", legacy, TasksScope, false},
+		{"upgraded grant has tasks", upgraded, TasksScope, true},
+		{"read-only does not satisfy full access", readonly, TasksScope, false},
+		{"full access satisfies read-only", upgraded, TasksScope + ".readonly", true},
+		{"prefix is not a match", ParseScopes("https://www.googleapis.com/auth/task"), TasksScope, false},
+		{"nothing granted", nil, TasksScope, false},
+	}
+	for _, tc := range tests {
+		if got := HasScope(tc.granted, tc.want); got != tc.ok {
+			t.Errorf("%s: HasScope = %v, want %v", tc.name, got, tc.ok)
 		}
 	}
 }

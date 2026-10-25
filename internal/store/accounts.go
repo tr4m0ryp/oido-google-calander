@@ -4,12 +4,7 @@
 package store
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"log/slog"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -27,6 +22,9 @@ var ErrNotFound = errors.New("account not connected")
 type Account struct {
 	Email   string    `json:"email"`
 	AddedAt time.Time `json:"added_at"`
+	// Scopes granted to the stored refresh token. Empty for accounts saved
+	// before scopes were recorded; the provider backfills them on first use.
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 type record struct {
@@ -46,34 +44,12 @@ type Accounts struct {
 	recs map[string]record
 }
 
-// Open loads (or initialises) the store in dir.
-func Open(dir string, box *crypt.Box) (*Accounts, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("create data dir: %w", err)
-	}
-	s := &Accounts{path: filepath.Join(dir, fileName), box: box, recs: map[string]record{}}
-	data, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return s, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("read account store: %w", err)
-	}
-	var f fileFormat
-	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, fmt.Errorf("parse account store: %w", err)
-	}
-	for _, r := range f.Accounts {
-		s.recs[normalise(r.Email)] = r
-	}
-	slog.Info("account store loaded", "accounts", len(s.recs))
-	return s, nil
-}
-
 func normalise(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
 
-// Put adds or replaces an account's refresh token.
-func (s *Accounts) Put(email, refreshToken string) error {
+// Put adds an account, or updates it in place on reconnect: the email is
+// the key, so the token and scopes are replaced and the original connection
+// time is kept.
+func (s *Accounts) Put(email, refreshToken string, scopes []string) error {
 	key := normalise(email)
 	sealed, err := s.box.Seal(refreshToken, key)
 	if err != nil {
@@ -82,7 +58,11 @@ func (s *Accounts) Put(email, refreshToken string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	prev, existed := s.recs[key]
-	s.recs[key] = record{Account: Account{Email: key, AddedAt: time.Now().UTC()}, SealedToken: sealed}
+	added := time.Now().UTC()
+	if existed {
+		added = prev.AddedAt
+	}
+	s.recs[key] = record{Account: Account{Email: key, AddedAt: added, Scopes: scopes}, SealedToken: sealed}
 	if err := s.flush(); err != nil {
 		if existed {
 			s.recs[key] = prev
@@ -92,6 +72,38 @@ func (s *Accounts) Put(email, refreshToken string) error {
 		return err
 	}
 	return nil
+}
+
+// SetScopes records the granted scopes of an existing account.
+func (s *Accounts) SetScopes(email string, scopes []string) error {
+	key := normalise(email)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prev, ok := s.recs[key]
+	if !ok {
+		return ErrNotFound
+	}
+	next := prev
+	next.Scopes = append([]string(nil), scopes...)
+	s.recs[key] = next
+	if err := s.flush(); err != nil {
+		s.recs[key] = prev
+		return err
+	}
+	return nil
+}
+
+// Get returns one account's metadata.
+func (s *Accounts) Get(email string) (Account, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r, ok := s.recs[normalise(email)]
+	if !ok {
+		return Account{}, false
+	}
+	a := r.Account
+	a.Scopes = append([]string(nil), a.Scopes...)
+	return a, true
 }
 
 // Remove forgets an account.
@@ -153,38 +165,4 @@ func (s *Accounts) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.recs)
-}
-
-// flush writes the store atomically; callers hold the write lock.
-func (s *Accounts) flush() error {
-	f := fileFormat{Accounts: make([]record, 0, len(s.recs))}
-	for _, r := range s.recs {
-		f.Accounts = append(f.Accounts, r)
-	}
-	sort.Slice(f.Accounts, func(i, j int) bool { return f.Accounts[i].Email < f.Accounts[j].Email })
-	data, err := json.MarshalIndent(f, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(s.path), ".accounts-*.json")
-	if err != nil {
-		return fmt.Errorf("write account store: %w", err)
-	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return fmt.Errorf("write account store: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), s.path)
 }

@@ -16,10 +16,6 @@ import (
 	gcal "google.golang.org/api/calendar/v3"
 )
 
-// Scopes requested when connecting an account: full calendar access plus
-// the minimum OpenID scopes needed to learn which account was connected.
-var Scopes = []string{gcal.CalendarScope, "openid", "email"}
-
 const userinfoURL = "https://openidconnect.googleapis.com/v1/userinfo"
 
 // Flow holds the OAuth client configuration.
@@ -43,18 +39,27 @@ func NewFlow(clientID, clientSecret, redirectURL string) *Flow {
 func (f *Flow) Config() *oauth2.Config { return f.cfg }
 
 // AuthURL is the consent URL. Offline access plus forced consent makes
-// Google return a refresh token even for a previously approved account.
-func (f *Flow) AuthURL(state string) string {
-	return f.cfg.AuthCodeURL(state,
+// Google return a refresh token even for a previously approved account, and
+// one carrying every requested scope, so reconnecting upgrades an old grant.
+// loginHint (an email, optional) preselects the account when reconnecting.
+func (f *Flow) AuthURL(state, loginHint string) string {
+	opts := []oauth2.AuthCodeOption{
 		oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("prompt", "consent select_account"),
-		oauth2.SetAuthURLParam("include_granted_scopes", "true"))
+		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
+	}
+	if hint := strings.TrimSpace(loginHint); hint != "" {
+		opts = append(opts, oauth2.SetAuthURLParam("login_hint", hint))
+	}
+	return f.cfg.AuthCodeURL(state, opts...)
 }
 
 // Grant is the result of a completed consent.
 type Grant struct {
 	Email        string
 	RefreshToken string
+	// Scopes Google reports as granted; nil when it did not say.
+	Scopes []string
 }
 
 // Exchange trades the authorization code for tokens and resolves the
@@ -78,7 +83,8 @@ func (f *Flow) Exchange(ctx context.Context, code string) (Grant, error) {
 	if err != nil {
 		return Grant{}, err
 	}
-	return Grant{Email: email, RefreshToken: tok.RefreshToken}, nil
+	scope, _ := tok.Extra("scope").(string)
+	return Grant{Email: email, RefreshToken: tok.RefreshToken, Scopes: ParseScopes(scope)}, nil
 }
 
 // grantedCalendar checks the granted scope list when Google reports one.
@@ -87,12 +93,7 @@ func grantedCalendar(tok *oauth2.Token) bool {
 	if scope == "" {
 		return true
 	}
-	for _, s := range strings.Fields(scope) {
-		if s == gcal.CalendarScope {
-			return true
-		}
-	}
-	return false
+	return HasScope(ParseScopes(scope), gcal.CalendarScope)
 }
 
 func (f *Flow) email(ctx context.Context, tok *oauth2.Token) (string, error) {

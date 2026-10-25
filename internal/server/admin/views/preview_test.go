@@ -54,7 +54,7 @@ func previewAccounts() []Account {
 				{Name: "Holidays in the Netherlands", Color: "#16a765"}, {Name: "Birthdays", Color: "#92e1c0", Tag: "Read only"},
 				{Name: "Family", Color: "#f691b2"},
 			},
-			MoreCount: 2, CalendarCount: 8,
+			MoreCount: 2, CalendarCount: 8, TasksEnabled: true,
 			Agenda: []AgendaItem{
 				{Day: "Today", Time: "14:00", Title: "Thesis supervision meeting", IsToday: true},
 				{Day: "Tomorrow", Time: "All day", Title: "Hackathon prep"},
@@ -65,7 +65,7 @@ func previewAccounts() []Account {
 		{
 			Email: "uva.cavum@gmail.com", Initial: "U", AddedText: "Oct 12, 2026", TimeZone: "Europe/Amsterdam",
 			Calendars:     []Chip{{Name: "Primary calendar", Color: "#4986e7"}, {Name: "Team rota", Color: "#b99aff", Tag: "Shared"}},
-			CalendarCount: 2,
+			CalendarCount: 2, TasksNeedsReconnect: true,
 		},
 		{Email: "a.very.long.mailbox.name.for.testing@googlemail.com", Initial: "A", AddedText: "Sep 1, 2026",
 			Error: "Google no longer accepts this account's sign-in. Reconnect it to restore access."},

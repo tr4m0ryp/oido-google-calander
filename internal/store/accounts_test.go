@@ -26,10 +26,10 @@ func TestAccountsLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Put("Alice@Example.com", "1//alice-token"); err != nil {
+	if err := s.Put("Alice@Example.com", "1//alice-token", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Put("bob@example.com", "1//bob-token"); err != nil {
+	if err := s.Put("bob@example.com", "1//bob-token", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -71,7 +71,7 @@ func TestAccountsLifecycle(t *testing.T) {
 func TestWrongKeyCannotDecrypt(t *testing.T) {
 	dir := t.TempDir()
 	s, _ := Open(dir, newBox(t))
-	_ = s.Put("a@example.com", "secret")
+	_ = s.Put("a@example.com", "secret", nil)
 	other, _ := crypt.New("a-completely-different-secret")
 	s2, err := Open(dir, other)
 	if err != nil {
@@ -79,5 +79,45 @@ func TestWrongKeyCannotDecrypt(t *testing.T) {
 	}
 	if _, err := s2.RefreshToken("a@example.com"); err == nil {
 		t.Error("decrypt with wrong key succeeded")
+	}
+}
+
+func TestReconnectUpdatesInPlace(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir, newBox(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := []string{"openid", "https://www.googleapis.com/auth/calendar"}
+	if err := s.Put("me@example.com", "1//old", legacy); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := s.Get("me@example.com")
+	upgraded := append(legacy, "https://www.googleapis.com/auth/tasks")
+	if err := s.Put("ME@example.com", "1//new", upgraded); err != nil {
+		t.Fatal(err)
+	}
+	if s.Len() != 1 {
+		t.Fatalf("reconnect duplicated the account: %d accounts", s.Len())
+	}
+	got, _ := s.Get("me@example.com")
+	if !got.AddedAt.Equal(first.AddedAt) || len(got.Scopes) != 3 {
+		t.Errorf("after reconnect = %+v, want original AddedAt and 3 scopes", got)
+	}
+	if tok, _ := s.RefreshToken("me@example.com"); tok != "1//new" {
+		t.Errorf("token = %q", tok)
+	}
+	if err := s.SetScopes("me@example.com", legacy); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(dir, newBox(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a, ok := reopened.Get("me@example.com"); !ok || len(a.Scopes) != 2 {
+		t.Errorf("scopes did not persist: %+v", a)
+	}
+	if err := s.SetScopes("nobody@example.com", nil); !errors.Is(err, ErrNotFound) {
+		t.Errorf("SetScopes on unknown account = %v", err)
 	}
 }

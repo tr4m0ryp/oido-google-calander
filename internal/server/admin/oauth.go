@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tr4m0ryp/oido-google-calander/internal/auth/googleauth"
 	"github.com/tr4m0ryp/oido-google-calander/internal/server/admin/access"
 )
 
@@ -76,7 +77,13 @@ func (a *Admin) oauthStart(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	http.Redirect(w, r, a.deps.Flow.AuthURL(a.states.issue(sess.ID)), http.StatusFound)
+	// ?account= comes from a "Reconnect" button and preselects that account
+	// on Google's chooser; only connected accounts are passed through.
+	hint := r.URL.Query().Get("account")
+	if !a.deps.Store.Has(hint) {
+		hint = ""
+	}
+	http.Redirect(w, r, a.deps.Flow.AuthURL(a.states.issue(sess.ID), hint), http.StatusFound)
 }
 
 func (a *Admin) oauthCallback(w http.ResponseWriter, r *http.Request) {
@@ -107,12 +114,27 @@ func (a *Admin) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		back(access.Flash{Text: "Could not connect the account: " + err.Error()})
 		return
 	}
-	if err := a.deps.Store.Put(grant.Email, grant.RefreshToken); err != nil {
+	reconnect := a.deps.Store.Has(grant.Email)
+	if err := a.deps.Store.Put(grant.Email, grant.RefreshToken, grant.Scopes); err != nil {
 		slog.Error("store account", "err", err)
 		back(access.Flash{Text: "Could not save the account; see the server log"})
 		return
 	}
 	a.deps.Accounts.Forget(grant.Email)
-	slog.Info("account connected", "email", grant.Email)
-	back(access.Flash{OK: true, Text: "Connected " + grant.Email})
+	slog.Info("account connected", "email", grant.Email, "reconnect", reconnect, "scopes", len(grant.Scopes))
+	back(connectedFlash(grant, reconnect))
+}
+
+// connectedFlash confirms a connect, warning when the user unticked the
+// Tasks permission on Google's granular consent screen.
+func connectedFlash(g googleauth.Grant, reconnect bool) access.Flash {
+	verb := "Connected "
+	if reconnect {
+		verb = "Reconnected "
+	}
+	if len(g.Scopes) > 0 && !googleauth.HasScope(g.Scopes, googleauth.TasksScope) {
+		return access.Flash{Text: verb + g.Email + " without the Google Tasks permission. " +
+			"Reconnect and tick the Tasks box to use the task tools."}
+	}
+	return access.Flash{OK: true, Text: verb + g.Email + "; calendar and tasks are enabled"}
 }

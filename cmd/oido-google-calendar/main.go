@@ -107,6 +107,7 @@ func serveHTTP(ctx context.Context) error {
 	}
 	flow := googleauth.NewFlow(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.ServerURL+"/oauth/callback")
 	provider := account.NewOAuth(accounts, flow.Config(), cfg.DefaultZone)
+	provider.SetupURL = cfg.ServerURL + "/setup"
 	adm, err := admin.New(admin.Deps{
 		Config: cfg, Store: accounts, Accounts: provider, Flow: flow,
 		ClientIP: clientip.New(cfg.TrustedProxies).Of, ToolCount: tools.Count,

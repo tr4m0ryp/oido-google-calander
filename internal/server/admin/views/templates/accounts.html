@@ -17,7 +17,7 @@
           <span class="avatar" aria-hidden="true">{{.Initial}}</span>
           <div class="row-main">
             <p class="row-email">{{emailBreak .Email}}</p>
-            <p class="row-meta">Connected <time datetime="{{.AddedISO}}">{{.AddedText}}</time>{{if .TimeZone}}<span class="sep" aria-hidden="true">·</span>{{.TimeZone}}{{end}}</p>
+            <p class="row-meta">Connected <time datetime="{{.AddedISO}}">{{.AddedText}}</time>{{if .TimeZone}}<span class="sep" aria-hidden="true">·</span>{{.TimeZone}}{{end}}{{if .TasksEnabled}}<span class="badge badge-ok">Tasks</span>{{else if .TasksNeedsReconnect}}<span class="badge badge-warn">Tasks off</span>{{end}}</p>
           </div>
           <form method="POST" action="/setup/remove" data-confirm="Remove {{.Email}}? MCP clients will lose access to its calendars until it is connected again.">
             <input type="hidden" name="csrf" value="{{$.CSRF}}">
@@ -29,9 +29,15 @@
           {{- if .Error}}
           <div class="inline-alert" role="alert">
             {{icon "alert"}}<p>{{.Error}}</p>
-            <a class="btn btn-quiet" href="/oauth/start">{{icon "refresh"}}Reconnect</a>
+            <a class="btn btn-quiet" href="/oauth/start?account={{.Email}}">{{icon "refresh"}}Reconnect</a>
           </div>
           {{- else}}
+          {{- if .TasksNeedsReconnect}}
+          <div class="inline-alert" role="status">
+            {{icon "alert"}}<p>Google Tasks is not enabled. This account was connected before task support; reconnect once to grant the Tasks permission. Calendar access keeps working meanwhile.</p>
+            <a class="btn btn-quiet" href="/oauth/start?account={{.Email}}">{{icon "refresh"}}Reconnect to enable Tasks</a>
+          </div>
+          {{- end}}
           <div class="panel">
             <section class="panel-section" aria-label="Calendars of {{.Email}}">
               <h3 class="panel-label">Calendars <span class="count">{{.CalendarCount}}</span></h3>

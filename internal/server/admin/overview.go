@@ -44,6 +44,11 @@ func (a *Admin) overview(ctx context.Context, now time.Time) []views.Account {
 }
 
 func (a *Admin) snapshot(ctx context.Context, v *views.Account, now time.Time) {
+	// A failed scope lookup leaves the Tasks state unknown; the calendar
+	// calls below surface the underlying problem.
+	if ok, err := a.deps.Accounts.HasTasks(ctx, v.Email); err == nil {
+		v.TasksEnabled, v.TasksNeedsReconnect = ok, !ok
+	}
 	client, err := a.deps.Accounts.Client(ctx, v.Email)
 	if err != nil {
 		v.Error = friendly(err)

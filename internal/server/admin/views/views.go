@@ -67,6 +67,10 @@ type Account struct {
 	CalendarCount int
 	Agenda        []AgendaItem
 	Error         string
+	// TasksEnabled: the grant includes Google Tasks. TasksNeedsReconnect:
+	// it was checked and lacks it. Both false means unknown.
+	TasksEnabled        bool
+	TasksNeedsReconnect bool
 }
 
 // Connection describes how clients reach the MCP endpoint.

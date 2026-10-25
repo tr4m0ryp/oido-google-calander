@@ -179,7 +179,8 @@ func TestMCPBearer(t *testing.T) {
 	res := send("Bearer " + apiKey)
 	buf := new(strings.Builder)
 	_, _ = io.Copy(buf, res.Body)
-	if res.StatusCode != http.StatusOK || !strings.Contains(buf.String(), "g_calendar_find_free_slots") {
+	if res.StatusCode != http.StatusOK || !strings.Contains(buf.String(), "g_calendar_find_free_slots") ||
+		!strings.Contains(buf.String(), "g_tasks_rollover_tasks") {
 		t.Errorf("tools/list = %d %s", res.StatusCode, buf.String())
 	}
 }

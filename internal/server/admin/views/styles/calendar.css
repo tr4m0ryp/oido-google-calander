@@ -5,6 +5,7 @@
 .account + .account { border-top: 1px solid var(--line); }
 .account > .row { padding-bottom: var(--s-3); }
 .row-meta .sep { padding: 0 var(--s-1); }
+.row-meta .badge { margin-left: var(--s-2); vertical-align: 1px; }
 
 /* Indented so the panel lines up with the email address above it. */
 .account-body {

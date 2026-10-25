@@ -123,8 +123,9 @@ func TestToolList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Tools) != Count {
-		t.Errorf("registered %d tools, Count says %d", len(res.Tools), Count)
+	// fakeProvider has no Tasks support, so only the calendar tools appear.
+	if len(res.Tools) != CalendarCount {
+		t.Errorf("registered %d tools, CalendarCount says %d", len(res.Tools), CalendarCount)
 	}
 	names := map[string]bool{}
 	for _, tool := range res.Tools {

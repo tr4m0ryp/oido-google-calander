@@ -1,13 +1,15 @@
 # Oido Google Calendar MCP
 
-A Google Calendar [MCP](https://modelcontextprotocol.io) server in Go for assistant agents: one
-endpoint, several Google accounts, and the scheduling tools an email + calendar agent actually
-needs (agenda across accounts, free/busy, free-slot finding, RSVPs, Meet links).
+A Google Calendar and Google Tasks [MCP](https://modelcontextprotocol.io) server in Go for
+assistant agents: one endpoint, several Google accounts, and the scheduling tools an email +
+calendar agent actually needs (agenda across accounts, free/busy, free-slot finding, RSVPs, Meet
+links), plus a daily to-do list with an idempotent morning rollover.
 
 > **Fork of [Djancyp/oido-google-calander](https://github.com/Djancyp/oido-google-calander).**
 > Upstream is a single-account stdio server for the Oido plugin system, authenticated with a
 > service account. This fork keeps that mode working and adds a multi-account HTTP service with
-> an admin dashboard, Google OAuth, encrypted token storage and eight new tools.
+> an admin dashboard, Google OAuth, encrypted token storage, eight new calendar tools and
+> eight Google Tasks tools.
 >
 > **License:** upstream publishes no license, so this fork does not add one either and does not
 > relicense anything. Without a license, default copyright applies to the upstream code; ask the
@@ -28,6 +30,8 @@ needs (agenda across accounts, free/busy, free-slot finding, RSVPs, Meet links).
 - **Timezones done properly**: RFC3339 input keeps its offset; naive input (`2026-05-15T09:00`) is
   read in the `timezone` argument, else the calendar's own zone, else `DEFAULT_TIMEZONE`. A bare
   date means an all-day event, or the whole day in a range. Zone data is compiled in.
+- **Google Tasks** (HTTP service): task lists, tasks with notes, due dates and subtasks, and a
+  daily rollover that moves unfinished tasks to today and clears completed ones.
 - **Admin dashboard**: password login with throttling, connected accounts with a live snapshot of
   each account's calendars and next events, one-click connect and remove, light and dark themes,
   phone layout. No external requests, strict CSP.
@@ -52,6 +56,39 @@ connected. Results are JSON.
 | `g_calendar_freebusy` | Busy blocks per account plus the merged union | `account` (default `all`), `time_min`, `time_max` |
 | `g_calendar_find_free_slots` | Free ranges open on every selected account | `duration_minutes`, `working_hours_start`/`_end`, `working_days`, `buffer_minutes`, `granularity_minutes`, `timezone` |
 
+## Tasks
+
+The HTTP service also exposes Google Tasks, for a daily to-do workflow: the agent adds tasks from
+mail and from "today I want to..." messages, and every morning `g_tasks_rollover_tasks` moves
+unfinished tasks to today and clears the completed ones. Task tools act on one account; `list`
+defaults to `@default` (the account's "My Tasks").
+
+| Tool | Purpose | Key arguments |
+|---|---|---|
+| `g_tasks_list_tasklists` | Task lists of an account | `account` |
+| `g_tasks_list_tasks` | Tasks of a list, filtered | `list`, `status` (`open`, `completed`, `all`), `due_before`, `due_after`, `due_on`, `include_completed`, `include_hidden`, `timezone` |
+| `g_tasks_create_task` | Create a task or subtask | `title`, `notes`, `due`, `parent`, `list` |
+| `g_tasks_update_task` | Change title, notes, due date or status | `task_id`, `title`, `notes`, `due` (empty removes it), `status` |
+| `g_tasks_complete_task` | Mark a task completed | `task_id`, `list` |
+| `g_tasks_delete_task` | Preview, then delete with `confirm:true` | `task_id`, `confirm` |
+| `g_tasks_clear_completed` | Hide all completed tasks of a list (Google's clear); count only without `confirm:true` | `list`, `confirm` |
+| `g_tasks_rollover_tasks` | Open tasks due before today get due today; optionally undated ones too; optionally clear completed. Returns counts, the moves and today's list | `list`, `timezone`, `include_undated`, `clear_completed`, `dry_run` |
+
+- **Due is a date only.** The Google Tasks API stores a due date and discards any time of day,
+  so `due` takes `YYYY-MM-DD`, `today` or `tomorrow`; a timestamp is reduced to its date in
+  `timezone` and its time is ignored.
+- **"Today" has a zone.** It is computed in `timezone` (default `Europe/Amsterdam`), so a run at
+  00:30 local time already sees the new day even though UTC does not, including on DST nights.
+- **Rollover is idempotent.** After a run no open task is due before today, so running it again
+  the same day changes nothing. `dry_run:true` reports the same result without writing.
+- **Extra OAuth scope.** Tasks need `https://www.googleapis.com/auth/tasks`, which
+  `/oauth/start` now requests. Accounts connected before Tasks support lack it: the dashboard
+  shows **Tasks off** with a **Reconnect to enable Tasks** button, and task tools return an
+  error asking for a reconnect. Reconnecting the same Google account updates it in place (same
+  entry, new token and scopes); calendar access keeps working until then. Granted scopes are
+  recorded at connect time; for older accounts they are read once from Google and cached.
+- Stdio mode (service account) has no Tasks tools: Tasks belong to a user account.
+
 ## Architecture
 
 ```
@@ -61,11 +98,15 @@ internal/
   auth/crypt/                 AES-256-GCM sealing of refresh tokens (scrypt-derived key)
   auth/googleauth/            OAuth web flow: consent URL, code exchange, verified email
   store/                      encrypted account store (atomic 0600 JSON file)
-  account/                    account name -> calendar client (OAuth accounts or service account)
+  account/                    account name -> calendar/tasks client, granted-scope checks
   calendar/                   Google Calendar API wrapper and compact event views
     timeinput/                time and timezone parsing
     availability/             interval merging and the free-slot search (pure, no Google types)
+  tasks/                      Google Tasks API wrapper, task views and filters
+    due/                      date-only due values, "today" in a zone
+    rollover/                 the daily rollover: pure plan plus an idempotent run
   tools/                      MCP tool schemas, validation and multi-account fan-out
+    tasktools/                the g_tasks_* tools
   server/                     HTTP mux: /mcp (bearer), /health
     clientip/                 real client IP behind trusted proxies
     admin/                    /setup dashboard and /oauth/start, /oauth/callback
@@ -100,11 +141,12 @@ Then open `https://calendar.example.com/setup`, sign in with `ADMIN_PASSWORD`, a
 ## Google OAuth setup
 
 1. In the [Google Cloud console](https://console.cloud.google.com/), pick or create a project and
-   enable the **Google Calendar API** (`gcloud services enable calendar-json.googleapis.com`).
+   enable the **Google Calendar API** and the **Google Tasks API**
+   (`gcloud services enable calendar-json.googleapis.com tasks.googleapis.com`).
 2. Under **Google Auth Platform > Branding / Audience**, configure the consent screen. While the
    app is in *Testing*, add every Google account you will connect as a test user.
-3. Under **Data access**, add the scope `https://www.googleapis.com/auth/calendar` (plus
-   `openid` and `email`). Unverified apps still work for test users after a warning screen.
+3. Under **Data access**, add the scopes `https://www.googleapis.com/auth/calendar` and
+   `https://www.googleapis.com/auth/tasks` (plus `openid` and `email`). Unverified apps still work for test users after a warning screen.
 4. Under **Clients**, create an OAuth client of type **Web application** and add the authorized
    redirect URI `https://calendar.example.com/oauth/callback` (that is, `SERVER_URL` +
    `/oauth/callback`).
@@ -198,7 +240,8 @@ CALENDAR_SERVICE_ACCOUNT_B64=$(base64 < key.json) CALENDAR_ID=you@example.com ./
   expires after 10 minutes.
 - Admin pages send a strict nonce-based CSP, `no-store`, `no-referrer` and `DENY` framing, and
   never render secrets. Request logs record method, path and status only.
-- Deleting an event is two-step: without `confirm:true` the tool returns a preview.
+- Deleting an event or a task, and clearing completed tasks, is two-step: without
+  `confirm:true` the tool returns a preview.
 
 ## Development
 
