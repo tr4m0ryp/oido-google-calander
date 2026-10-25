@@ -1,0 +1,37 @@
+{{define "connection"}}
+  <section class="card" aria-labelledby="connection-title">
+    <header class="card-head">
+      <div>
+        <h2 class="card-title" id="connection-title">Connection</h2>
+        <p class="card-desc">Point your MCP client at this endpoint.</p>
+      </div>
+    </header>
+    <dl class="facts">
+      <div class="fact">
+        <dt>MCP endpoint</dt>
+        <dd>
+          <div class="endpoint">
+            <code id="mcp-url">{{.MCPURL}}</code>
+            <button class="btn btn-quiet" type="button" data-copy="mcp-url" aria-label="Copy MCP endpoint URL">{{icon "copy"}}<span data-copy-label>Copy</span></button>
+          </div>
+        </dd>
+      </div>
+      <div class="fact">
+        <dt>Calendar access</dt>
+        <dd><span class="badge badge-ok">Full calendar</span><span class="fact-hint">{{.ToolCount}} tools: read, create, edit, delete, RSVP and free/busy</span></dd>
+      </div>
+      <div class="fact">
+        <dt>Client auth</dt>
+        <dd>
+          {{- if .BearerAuth}}<span class="badge badge-ok">Bearer key</span><span class="fact-hint">Clients send MCP_API_KEY as a bearer token</span>
+          {{- else}}<span class="badge badge-danger">None</span><span class="fact-hint">Anyone with the URL can use /mcp. Set MCP_API_KEY.</span>
+          {{- end}}
+        </dd>
+      </div>
+      <div class="fact">
+        <dt>Fallback timezone</dt>
+        <dd><code class="inline-code">{{.DefaultZone}}</code><span class="fact-hint">Used only when neither the request nor the calendar names a zone</span></dd>
+      </div>
+    </dl>
+  </section>
+{{end}}

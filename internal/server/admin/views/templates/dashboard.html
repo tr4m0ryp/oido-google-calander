@@ -1,0 +1,26 @@
+{{define "body"}}
+<div class="shell">
+  <header class="topbar">
+    {{template "mark"}}
+    <div>
+      <h1 class="brand-name">Calendar MCP</h1>
+      <p class="brand-sub">Server admin</p>
+    </div>
+    <div class="topbar-actions">
+      <form method="POST" action="/setup/logout">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <button class="btn btn-quiet" type="submit" aria-label="Sign out">{{icon "logout"}}<span class="btn-label">Sign out</span></button>
+      </form>
+    </div>
+  </header>
+  <main class="stack">
+    {{- with .Flash}}
+    <div class="flash {{if .OK}}flash-ok{{else}}flash-error{{end}}" role="{{if .OK}}status{{else}}alert{{end}}">
+      {{if .OK}}{{icon "success"}}{{else}}{{icon "alert"}}{{end}}<p>{{.Text}}</p>
+    </div>
+    {{- end}}
+    {{template "accounts" .}}
+    {{template "connection" .Connection}}
+  </main>
+</div>
+{{end}}

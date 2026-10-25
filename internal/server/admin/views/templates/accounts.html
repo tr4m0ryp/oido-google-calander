@@ -1,0 +1,74 @@
+{{define "accounts"}}
+  <section class="card" aria-labelledby="accounts-title">
+    <header class="card-head">
+      <div>
+        <h2 class="card-title" id="accounts-title">Connected accounts <span class="count">{{len .Accounts}}</span></h2>
+        <p class="card-desc">Calendars this MCP server can read and edit.</p>
+      </div>
+      {{- if .Accounts}}
+      <a class="btn btn-primary" href="/oauth/start">{{icon "plus"}}Connect Google account</a>
+      {{- end}}
+    </header>
+    {{- if .Accounts}}
+    <ul class="list">
+      {{- range .Accounts}}
+      <li class="account">
+        <div class="row">
+          <span class="avatar" aria-hidden="true">{{.Initial}}</span>
+          <div class="row-main">
+            <p class="row-email">{{emailBreak .Email}}</p>
+            <p class="row-meta">Connected <time datetime="{{.AddedISO}}">{{.AddedText}}</time>{{if .TimeZone}}<span class="sep" aria-hidden="true">·</span>{{.TimeZone}}{{end}}</p>
+          </div>
+          <form method="POST" action="/setup/remove" data-confirm="Remove {{.Email}}? MCP clients will lose access to its calendars until it is connected again.">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="email" value="{{.Email}}">
+            <button class="btn btn-danger" type="submit" aria-label="Remove {{.Email}}">{{icon "trash"}}<span class="btn-label">Remove</span></button>
+          </form>
+        </div>
+        <div class="account-body">
+          {{- if .Error}}
+          <div class="inline-alert" role="alert">
+            {{icon "alert"}}<p>{{.Error}}</p>
+            <a class="btn btn-quiet" href="/oauth/start">{{icon "refresh"}}Reconnect</a>
+          </div>
+          {{- else}}
+          <div class="panel">
+            <section class="panel-section" aria-label="Calendars of {{.Email}}">
+              <h3 class="panel-label">Calendars <span class="count">{{.CalendarCount}}</span></h3>
+              <ul class="chips">
+                {{- range .Calendars}}
+                <li class="chip">{{if .Color}}<svg class="dot" viewBox="0 0 8 8" aria-hidden="true"><circle cx="4" cy="4" r="4" fill="{{.Color}}"/></svg>{{end}}<span class="chip-name">{{.Name}}</span>{{if .Tag}}<span class="chip-tag">{{.Tag}}</span>{{end}}</li>
+                {{- end}}
+                {{- if .MoreCount}}
+                <li class="chip chip-more">+{{.MoreCount}} more</li>
+                {{- end}}
+              </ul>
+            </section>
+            <section class="panel-section" aria-label="Upcoming events for {{.Email}}">
+              <h3 class="panel-label">Upcoming</h3>
+              {{- if .Agenda}}
+              <ol class="agenda">
+                {{- range .Agenda}}
+                <li class="agenda-row"><span class="agenda-day{{if .IsToday}} is-today{{end}}">{{.Day}}</span><span class="agenda-time">{{.Time}}</span><span class="agenda-title">{{.Title}}</span></li>
+                {{- end}}
+              </ol>
+              {{- else}}
+              <p class="panel-empty">No upcoming events on the primary calendar.</p>
+              {{- end}}
+            </section>
+          </div>
+          {{- end}}
+        </div>
+      </li>
+      {{- end}}
+    </ul>
+    {{- else}}
+    <div class="empty">
+      <div class="empty-icon">{{icon "calendar"}}</div>
+      <h3 class="empty-title">No Google accounts yet</h3>
+      <p class="empty-text">Connect a Google account through Google sign-in. Its refresh token is stored encrypted on this server.</p>
+      <a class="btn btn-primary btn-lg" href="/oauth/start">{{icon "plus"}}Connect Google account</a>
+    </div>
+    {{- end}}
+  </section>
+{{end}}

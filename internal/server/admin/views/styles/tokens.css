@@ -1,0 +1,84 @@
+/*
+ * Design tokens, shared with the Gmail MCP admin so both consoles read as one product.
+ * Type: modular scale, base 16px, ratio 1.2. Space: 8pt grid (4px half-step).
+ * Colour: one warm neutral ramp, one brand hue, status hues. Dark mode redefines colour only.
+ */
+:root {
+  color-scheme: light dark;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --t--1: 0.833rem;
+  --t-0: 1rem;
+  --t-1: 1.2rem;
+  --t-2: 1.44rem;
+  --t-3: 1.728rem;
+  --lh-tight: 1.2;
+  --lh-body: 1.55;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+  --control: 40px;
+  --control-lg: 48px;
+  --measure: 46rem;
+
+  --bg: #f6f4ef;
+  --surface: #fffdf9;
+  --surface-2: #f1eee7;
+  --ink: #1a1815;
+  --ink-2: #3a3530;
+  --muted: #6b6560;
+  --line: #e6e1d8;
+  --line-strong: #d3ccc0;
+
+  --brand-50: #eceefe;
+  --brand-500: #3d4ee0;
+  --brand-ink: #28329c;
+
+  --ok-50: #e7f4ec;
+  --ok-600: #1d7243;
+  --warn-50: #fbf0dc;
+  --warn-600: #8a5300;
+  --danger-50: #fcebea;
+  --danger-500: #d93b30;
+  --danger-600: #b42318;
+
+  --shadow: 0 1px 2px rgb(26 24 21 / 0.04), 0 8px 24px rgb(26 24 21 / 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131210;
+    --surface: #1b1a17;
+    --surface-2: #24221f;
+    --ink: #f2eee8;
+    --ink-2: #d6d0c7;
+    --muted: #a59e95;
+    --line: #2d2a26;
+    --line-strong: #403b35;
+
+    --brand-50: #23274d;
+    --brand-500: #8e9aff;
+    --brand-ink: #cdd2ff;
+
+    --ok-50: #142a1c;
+    --ok-600: #84d4a2;
+    --warn-50: #33270f;
+    --warn-600: #f0b75e;
+    --danger-50: #351816;
+    --danger-500: #ff7b70;
+    --danger-600: #ff9d94;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  }
+}

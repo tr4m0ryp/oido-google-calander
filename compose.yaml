@@ -1,0 +1,16 @@
+# Production-style deployment: the app listens on localhost only and a
+# reverse proxy (Caddy, nginx) terminates TLS in front of it.
+services:
+  app:
+    build: .
+    image: oido-google-calendar:local
+    container_name: gcal-mcp
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:3110:3000"
+    volumes:
+      - gcal-data:/data
+
+volumes:
+  gcal-data:

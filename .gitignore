@@ -1,3 +1,6 @@
 *.zip
 *-mcp
+/oido-google-calendar
 dist/
+data/
+.env

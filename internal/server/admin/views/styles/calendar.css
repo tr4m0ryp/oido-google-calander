@@ -1,0 +1,78 @@
+/* Calendar layer: per-account calendars and agenda, top-bar actions, inline alerts. */
+.topbar-actions { margin-left: auto; display: flex; align-items: center; gap: var(--s-2); }
+.topbar-actions form { margin: 0; }
+
+.account + .account { border-top: 1px solid var(--line); }
+.account > .row { padding-bottom: var(--s-3); }
+.row-meta .sep { padding: 0 var(--s-1); }
+
+/* Indented so the panel lines up with the email address above it. */
+.account-body {
+  display: grid; gap: var(--s-3);
+  padding: 0 var(--s-5) var(--s-5) calc(var(--s-5) + var(--control) + var(--s-4));
+}
+.panel {
+  min-width: 0;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.panel-section { padding: var(--s-3) var(--s-4) var(--s-4); }
+.panel-section + .panel-section { border-top: 1px solid var(--line); }
+.panel-label {
+  display: flex; align-items: center; gap: var(--s-2);
+  margin-bottom: var(--s-3);
+  font-size: var(--t--1); font-weight: 600; color: var(--muted);
+}
+.panel-label .count { line-height: var(--s-4); min-width: var(--s-4); background: var(--surface); }
+.panel-empty { font-size: var(--t--1); color: var(--muted); }
+
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.chip {
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  max-width: 100%;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: var(--t--1); line-height: calc(var(--s-5) + var(--s-1));
+}
+.chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip .dot { flex: none; width: var(--s-2); height: var(--s-2); }
+.chip-tag { color: var(--muted); font-weight: 600; }
+.chip-more { color: var(--muted); border-style: dashed; background: transparent; }
+
+.agenda { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.agenda-row {
+  display: grid; grid-template-columns: 5.5rem 3.25rem minmax(0, 1fr); align-items: baseline;
+  gap: var(--s-2);
+  font-size: var(--t--1);
+}
+.agenda-day, .agenda-time { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.agenda-day.is-today { color: var(--brand-ink); font-weight: 600; }
+.agenda-title { min-width: 0; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.inline-code {
+  padding: 0 var(--s-2);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: var(--t--1); line-height: var(--s-5);
+}
+
+.inline-alert {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--warn-600) 25%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--warn-50); color: var(--warn-600);
+  font-size: var(--t--1); font-weight: 500;
+}
+.inline-alert svg { flex: none; width: 18px; height: 18px; }
+.inline-alert p { flex: 1; min-width: 12rem; }
+.inline-alert .btn { min-height: calc(var(--control) - var(--s-2)); }
+
+@media (max-width: 560px) {
+  .account-body { padding: 0 var(--s-4) var(--s-4); }
+  .agenda-row { grid-template-columns: 4.75rem 3rem minmax(0, 1fr); }
+  .topbar-actions .btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .topbar-actions .btn { width: var(--control); padding: 0; }
+}

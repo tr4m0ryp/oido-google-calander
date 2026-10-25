@@ -1,0 +1,20 @@
+{{define "body"}}
+<main class="auth">
+  <div class="card auth-card">
+    {{template "mark"}}
+    <h1 class="auth-title">Calendar MCP admin</h1>
+    <p class="auth-lede">Sign in to manage the Google accounts this server can access.</p>
+    <form method="POST" action="/setup/login">
+      <div class="field">
+        <label class="label" for="password">Admin password</label>
+        <input class="input" id="password" type="password" name="password" autocomplete="current-password"
+          autofocus required{{if .Message}} aria-invalid="true" aria-describedby="password-error"{{end}}{{if .Locked}} disabled{{end}}>
+        {{- if .Message}}
+        <p class="field-error" id="password-error" role="alert">{{icon "alert"}}{{.Message}}</p>
+        {{- end}}
+      </div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit"{{if .Locked}} disabled{{end}}>Sign in</button>
+    </form>
+  </div>
+</main>
+{{end}}

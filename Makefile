@@ -1,4 +1,4 @@
-.PHONY: build clean dist
+.PHONY: build test docker clean dist
 
 PLUGIN_NAME := oido-google-calendar
 BINARY := $(PLUGIN_NAME)-mcp
@@ -6,9 +6,16 @@ DIST_DIR := dist
 
 build:
 	@echo "Building $(PLUGIN_NAME) MCP server..."
-	CGO_ENABLED=0 go build -o $(BINARY) .
-	@echo "✓ Built: $(BINARY)"
+	CGO_ENABLED=0 go build -trimpath -o $(BINARY) ./cmd/oido-google-calendar
+	@echo "Built: $(BINARY)"
 	@ls -lh $(BINARY)
+
+test:
+	go vet ./...
+	go test ./...
+
+docker:
+	docker build -t oido-google-calendar:local .
 
 dist: build
 	@mkdir -p $(DIST_DIR)
@@ -23,7 +30,7 @@ dist: build
 	@mkdir -p $(DIST_DIR)/skills/oido-google-calendar
 	@cp -r skills/oido-google-calendar/* $(DIST_DIR)/skills/oido-google-calendar/ 2>/dev/null || true
 	@cd $(DIST_DIR) && zip -r ../$(DIST_DIR)/$(PLUGIN_NAME).zip commands/ skills/ 2>/dev/null || true
-	@echo "✓ Packaged: $(DIST_DIR)/$(PLUGIN_NAME).zip"
+	@echo "Packaged: $(DIST_DIR)/$(PLUGIN_NAME).zip"
 	@ls -lh $(DIST_DIR)/$(PLUGIN_NAME).zip
 	@echo ""
 	@echo "Next steps:"
